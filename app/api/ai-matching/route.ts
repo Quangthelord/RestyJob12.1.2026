@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     // Fetch all open jobs
     const allJobs = await prisma.job.findMany({
       where: {
-        status: "OPEN",
+        status: "PENDING",
       },
       include: {
         branch: true,

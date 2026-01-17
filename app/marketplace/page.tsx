@@ -67,7 +67,7 @@ export default function MarketplacePage() {
   const fetchJobs = async () => {
     try {
       setLoading(true);
-      const { data } = await api.get("/jobs?status=OPEN");
+      const { data } = await api.get("/jobs?status=PENDING");
       setJobs(data.jobs || []);
     } catch (error) {
       console.error("Error fetching jobs:", error);

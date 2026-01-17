@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
     const urgentJobs = await prisma.job.findMany({
       where: {
-        status: "OPEN",
+        status: "PENDING",
         startTime: {
           gte: now,
           lte: oneHourLater,
@@ -55,6 +55,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
-
-
