@@ -1,12 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  swcMinify: true,
+  // Optimize for Vercel
+  output: 'standalone',
+  // Enable experimental features if needed
+  experimental: {
+    // serverActions: true,
+  },
+  // Environment variables
   env: {
-    DATABASE_URL: process.env.DATABASE_URL,
-    JWT_SECRET: process.env.JWT_SECRET,
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 }
 
 module.exports = nextConfig
-
