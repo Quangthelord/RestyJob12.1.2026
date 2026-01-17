@@ -1,0 +1,211 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BUSINESS
+  WORKER
+  ADMIN
+}
+
+enum JobStatus {
+  PENDING      // Đang chờ khớp
+  MATCHED      // Đã khớp với worker
+  IN_PROGRESS  // Đang làm việc
+  COMPLETED    // Hoàn thành
+  CANCELLED    // Đã hủy
+}
+
+enum MatchStatus {
+  PENDING      // Chờ worker xác nhận
+  ACCEPTED     // Worker đã chấp nhận
+  REJECTED     // Worker đã từ chối
+  CANCELLED    // Đã hủy
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  name          String
+  phone         String?
+  role          UserRole  @default(WORKER)
+  avatar        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Business fields
+  companyName   String?
+  taxCode       String?
+  branches      Branch[]
+  
+  // Worker fields
+  skills        String[]  // Kỹ năng của worker
+  location      String?   // Vị trí địa lý
+  rating        Float     @default(0) // Điểm đánh giá trung bình
+  totalRatings  Int       @default(0) // Tổng số đánh giá
+  bio           String?
+  
+  // Relations
+  jobsPosted    Job[]     @relation("JobPoster")
+  matches       Match[]
+  checkIns      CheckIn[]
+  ratingsGiven  Rating[]  @relation("Rater")
+  ratingsReceived Rating[] @relation("Ratee")
+  payments      Payment[]
+  
+  @@index([email])
+  @@index([role])
+}
+
+model Branch {
+  id          String   @id @default(uuid())
+  name        String
+  address     String
+  latitude    Float?
+  longitude   Float?
+  businessId  String
+  business    User     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  jobs        Job[]
+  
+  @@index([businessId])
+}
+
+model Job {
+  id              String      @id @default(uuid())
+  title           String
+  description     String
+  branchId        String
+  branch          Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  businessId      String
+  business        User        @relation("JobPoster", fields: [businessId], references: [id], onDelete: Cascade)
+  
+  // Job details
+  skillsRequired  String[]    // Kỹ năng yêu cầu
+  startTime       DateTime
+  endTime         DateTime
+  hourlyRate      Float       // Mức lương theo giờ
+  totalAmount     Float       // Tổng tiền = hourlyRate * (endTime - startTime)
+  maxWorkers      Int         @default(1) // Số lượng worker cần
+  
+  status          JobStatus   @default(PENDING)
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  matches         Match[]
+  checkIns        CheckIn[]
+  payments        Payment[]
+  
+  @@index([businessId])
+  @@index([branchId])
+  @@index([status])
+  @@index([startTime])
+}
+
+model Match {
+  id              String      @id @default(uuid())
+  jobId           String
+  job             Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workerId        String
+  worker          User        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  
+  status          MatchStatus @default(PENDING)
+  matchedAt       DateTime    @default(now())
+  acceptedAt      DateTime?
+  
+  // Matching score (0-100)
+  matchScore      Float?      // Điểm khớp dựa trên kỹ năng, vị trí, rating
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  checkIns        CheckIn[]
+  rating          Rating?
+  payment         Payment?
+  
+  @@unique([jobId, workerId])
+  @@index([workerId])
+  @@index([jobId])
+  @@index([status])
+}
+
+model CheckIn {
+  id              String      @id @default(uuid())
+  matchId         String
+  match           Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  jobId           String
+  job             Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workerId        String
+  worker          User        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  
+  checkInTime     DateTime    @default(now())
+  checkOutTime    DateTime?
+  location        String?     // Vị trí check-in (GPS coordinates)
+  
+  createdAt       DateTime    @default(now())
+  
+  @@index([matchId])
+  @@index([workerId])
+  @@index([jobId])
+}
+
+model Rating {
+  id              String      @id @default(uuid())
+  matchId         String      @unique
+  match           Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  
+  raterId         String      // Người đánh giá (business hoặc worker)
+  rater           User        @relation("Rater", fields: [raterId], references: [id], onDelete: Cascade)
+  rateeId         String      // Người được đánh giá
+  ratee           User        @relation("Ratee", fields: [rateeId], references: [id], onDelete: Cascade)
+  
+  score           Int         // Điểm từ 1-5
+  comment         String?
+  
+  createdAt       DateTime    @default(now())
+  
+  @@index([raterId])
+  @@index([rateeId])
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  matchId         String        @unique
+  match           Match         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  jobId           String
+  job             Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workerId        String
+  worker          User          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  
+  amount          Float
+  status          PaymentStatus @default(PENDING)
+  transactionId   String?       // ID giao dịch từ payment gateway
+  
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([workerId])
+  @@index([jobId])
+  @@index([status])
+}
+
