@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { z } from "zod";
 
 const updateMatchSchema = z.object({
+  matchId: z.string().uuid(),
   status: z.enum(["ACCEPTED", "REJECTED", "CANCELLED"]),
 });
 
@@ -81,6 +82,11 @@ export async function PUT(req: NextRequest) {
         email: "demo@worker.com",
         name: "Demo Worker",
         role: "WORKER" as const,
+        companyName: null,
+        rating: 0,
+        avatar: null,
+        skills: [],
+        location: null,
       };
     }
 

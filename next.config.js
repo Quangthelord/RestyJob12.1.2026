@@ -2,15 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // Optimize for Vercel
-  output: 'standalone',
+  // Remove output: 'standalone' for Vercel (not needed and can cause issues)
+  // Vercel handles Next.js builds automatically
   // Enable experimental features if needed
   experimental: {
     // serverActions: true,
-  },
-  // Environment variables
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 }
 

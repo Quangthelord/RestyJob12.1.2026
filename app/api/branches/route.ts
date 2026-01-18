@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
         name: "Demo Business",
         role: "BUSINESS" as const,
         companyName: "Demo Company",
+        rating: 0,
+        avatar: null,
+        skills: [],
+        location: null,
       };
     }
 

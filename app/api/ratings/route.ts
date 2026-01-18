@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
         email: "demo@user.com",
         name: "Demo User",
         role: "WORKER" as const,
+        companyName: null,
+        rating: 0,
+        avatar: null,
+        skills: [],
+        location: null,
       };
     }
 

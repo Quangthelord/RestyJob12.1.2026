@@ -30,9 +30,9 @@ export default function JobDetailPage() {
       ]);
 
       setJob(jobRes.data.job);
-      const workerMatch = matchesRes.data.matches.find(
+      const workerMatch = user ? matchesRes.data.matches.find(
         (m: any) => m.workerId === user.id
-      );
+      ) : undefined;
       setMatch(workerMatch);
 
       if (workerMatch) {
@@ -120,7 +120,7 @@ export default function JobDetailPage() {
     (m: any) => m.id === match?.id
   )?.rating;
   const canRate =
-    match?.status === "COMPLETED" && !existingRating && user.role === "WORKER";
+    match?.status === "COMPLETED" && !existingRating && user?.role === "WORKER";
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -501,28 +501,31 @@ export default function MarketplacePage() {
                       <span className="text-orange-600">💡</span> Có thể bạn quan tâm:
                     </h4>
                     <div className="space-y-3">
-                      {similarJobs.map((job) => (
-                        <Link
-                          key={job.id}
-                          href={`/worker/jobs/${job.id}`}
-                          className="block bg-white rounded-lg p-4 hover:shadow-md transition-all border border-gray-200 hover:border-orange-300"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h5 className="font-semibold text-gray-900">{job.title}</h5>
-                              <p className="text-sm text-gray-600">{job.business.name}</p>
-                              {job.distance !== null && (
-                                <p className="text-xs text-orange-600 mt-1 font-medium">
-                                  📍 Cách {formatDistance(job.distance)}
-                                </p>
-                              )}
+                      {similarJobs.map((job) => {
+                        const jobDistance = getJobDistance(job);
+                        return (
+                          <Link
+                            key={job.id}
+                            href={`/worker/jobs/${job.id}`}
+                            className="block bg-white rounded-lg p-4 hover:shadow-md transition-all border border-gray-200 hover:border-orange-300"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="font-semibold text-gray-900">{job.title}</h5>
+                                <p className="text-sm text-gray-600">{job.business.name}</p>
+                                {jobDistance !== null && (
+                                  <p className="text-xs text-orange-600 mt-1 font-medium">
+                                    📍 Cách {formatDistance(jobDistance)}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-orange-600 font-bold text-lg">
+                                {formatCurrency(job.hourlyRate)}/giờ
+                              </span>
                             </div>
-                            <span className="text-orange-600 font-bold text-lg">
-                              {formatCurrency(job.hourlyRate)}/giờ
-                            </span>
-                          </div>
-                        </Link>
-                      ))}
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

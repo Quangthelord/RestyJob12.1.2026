@@ -12,7 +12,21 @@ export async function GET(req: NextRequest) {
   try {
     // Demo mode - authentication optional
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
-    const user = await getCurrentUser(token || null);
+    let user = await getCurrentUser(token || null);
+    
+    if (!user) {
+      user = {
+        id: "demo-worker-id",
+        email: "demo@worker.com",
+        name: "Demo Worker",
+        role: "WORKER" as const,
+        avatar: null,
+        companyName: null,
+        skills: [],
+        location: null,
+        rating: 0,
+      };
+    }
 
     const { searchParams } = new URL(req.url);
     const matchId = searchParams.get("matchId");
@@ -80,6 +94,11 @@ export async function POST(req: NextRequest) {
         email: "demo@worker.com",
         name: "Demo Worker",
         role: "WORKER" as const,
+        avatar: null,
+        companyName: null,
+        skills: [],
+        location: null,
+        rating: 0,
       };
     }
 
@@ -178,6 +197,11 @@ export async function PUT(req: NextRequest) {
         email: "demo@worker.com",
         name: "Demo Worker",
         role: "WORKER" as const,
+        avatar: null,
+        companyName: null,
+        skills: [],
+        location: null,
+        rating: 0,
       };
     }
 
@@ -235,11 +259,8 @@ export async function PUT(req: NextRequest) {
       data: { status: "COMPLETED" },
     });
 
-    // Update match status
-    await prisma.match.update({
-      where: { id: checkIn.matchId },
-      data: { status: "COMPLETED" },
-    });
+    // Update match status - MatchStatus doesn't have COMPLETED, keep as ACCEPTED
+    // Match status remains ACCEPTED after check-out
 
     // Create payment record
     const hours =
