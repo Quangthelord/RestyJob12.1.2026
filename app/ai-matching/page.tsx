@@ -46,8 +46,6 @@ interface MatchResult {
 export default function AIMatchingPage() {
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
   const [currentWeek, setCurrentWeek] = useState(new Date());
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectStart, setSelectStart] = useState<{ date: string; hour: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<MatchResult[]>([]);
   const [userLocation, setUserLocation] = useState<Location | null>(null);
@@ -89,40 +87,116 @@ export default function AIMatchingPage() {
   };
 
   const handleSlotClick = (date: string, hour: number) => {
-    if (!isSelecting) {
-      setIsSelecting(true);
-      setSelectStart({ date, hour });
+    const isSelected = isSlotSelected(date, hour);
+    
+    if (isSelected) {
+      // Remove this hour from selected slots
+      const updatedSlots: TimeSlot[] = [];
+      
+      selectedSlots.forEach((slot) => {
+        if (slot.date !== date) {
+          updatedSlots.push(slot);
+          return;
+        }
+        
+        const slotStart = parseInt(slot.startTime.split(":")[0]);
+        const slotEnd = parseInt(slot.endTime.split(":")[0]);
+        
+        // Check if this hour is in this slot
+        if (hour >= slotStart && hour < slotEnd) {
+          // If removing from start
+          if (hour === slotStart) {
+            if (slotEnd > slotStart + 1) {
+              // Keep the rest of the slot
+              updatedSlots.push({
+                date,
+                startTime: formatTime(slotStart + 1),
+                endTime: slot.endTime,
+              });
+            }
+            // Otherwise remove the entire slot (it was only 1 hour)
+          }
+          // If removing from end
+          else if (hour === slotEnd - 1) {
+            if (slotEnd > slotStart + 1) {
+              // Keep the beginning of the slot
+              updatedSlots.push({
+                date,
+                startTime: slot.startTime,
+                endTime: formatTime(slotEnd - 1),
+              });
+            }
+            // Otherwise remove the entire slot
+          }
+          // If removing from middle, split into two slots
+          else {
+            updatedSlots.push({
+              date,
+              startTime: slot.startTime,
+              endTime: formatTime(hour),
+            });
+            updatedSlots.push({
+              date,
+              startTime: formatTime(hour + 1),
+              endTime: slot.endTime,
+            });
+          }
+        } else {
+          // Keep slots that don't contain this hour
+          updatedSlots.push(slot);
+        }
+      });
+      
+      setSelectedSlots(updatedSlots);
     } else {
-      if (selectStart && selectStart.date === date) {
-        const startHour = Math.min(selectStart.hour, hour);
-        const endHour = Math.max(selectStart.hour, hour) + 1;
-
-        // Remove overlapping slots
-        const newSlots = selectedSlots.filter(
-          (slot) => !(slot.date === date && 
-            parseInt(slot.startTime.split(":")[0]) < endHour &&
-            parseInt(slot.endTime.split(":")[0]) > startHour)
-        );
-
-        // Add new slot
-        newSlots.push({
+      // Add this hour - try to merge with adjacent slots
+      let merged = false;
+      const updatedSlots: TimeSlot[] = [];
+      
+      selectedSlots.forEach((slot) => {
+        if (slot.date !== date) {
+          updatedSlots.push(slot);
+          return;
+        }
+        
+        const slotStart = parseInt(slot.startTime.split(":")[0]);
+        const slotEnd = parseInt(slot.endTime.split(":")[0]);
+        
+        // If hour is right before slot start, extend backward
+        if (hour === slotStart - 1) {
+          merged = true;
+          updatedSlots.push({
+            date,
+            startTime: formatTime(hour),
+            endTime: slot.endTime,
+          });
+        }
+        // If hour is right after slot end, extend forward
+        else if (hour === slotEnd) {
+          merged = true;
+          updatedSlots.push({
+            date,
+            startTime: slot.startTime,
+            endTime: formatTime(hour + 1),
+          });
+        } else {
+          updatedSlots.push(slot);
+        }
+      });
+      
+      if (!merged) {
+        // Add as new single-hour slot
+        updatedSlots.push({
           date,
-          startTime: formatTime(startHour),
-          endTime: formatTime(endHour),
+          startTime: formatTime(hour),
+          endTime: formatTime(hour + 1),
         });
-
-        setSelectedSlots(newSlots);
       }
-      setIsSelecting(false);
-      setSelectStart(null);
+      
+      setSelectedSlots(updatedSlots);
     }
   };
 
-  const handleSlotMouseEnter = (date: string, hour: number) => {
-    if (isSelecting && selectStart && selectStart.date === date) {
-      // Visual feedback while selecting
-    }
-  };
 
   const removeSlot = (index: number) => {
     setSelectedSlots(selectedSlots.filter((_, i) => i !== index));
@@ -262,7 +336,6 @@ export default function AIMatchingPage() {
                           <button
                             key={`${dateKey}-${hour}`}
                             onClick={() => handleSlotClick(dateKey, hour)}
-                            onMouseEnter={() => handleSlotMouseEnter(dateKey, hour)}
                             className={`
                               h-12 rounded-lg border-2 transition-all
                               ${

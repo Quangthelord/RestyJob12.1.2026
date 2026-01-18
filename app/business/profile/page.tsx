@@ -8,247 +8,257 @@ import Navbar from "@/components/Navbar";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import {
+  Building2,
+  MapPin,
+  Clock,
+  UtensilsCrossed,
+  ChefHat,
+  ShoppingBag,
+  Sparkles,
+  DollarSign,
+  CheckCircle2,
+  Star,
+  ShieldCheck,
+  Award,
+  Phone,
+  AlertCircle,
+  Users,
+  Calendar,
+  MessageCircle,
+  Info,
+  Coffee,
+  Store,
+  Factory
+} from "lucide-react";
 
-interface Branch {
+type TabType = "overview" | "shifts" | "reviews" | "policies";
+
+interface BusinessProfile {
   id: string;
   name: string;
+  companyName?: string;
+  logo?: string;
+  storefrontImage?: string;
+  type: "Chuỗi" | "Independent";
+  businessType: "Quán ăn" | "Nhà hàng" | "Cafe" | "Bar" | "Chuỗi F&B";
+  scale: "<10" | "10–30" | "30+";
   address: string;
   city: string;
   latitude?: number;
   longitude?: number;
-}
-
-interface FavoriteWorker {
-  id: string;
-  name: string;
-  rating: number;
-  completedJobs: number;
-  skills: string[];
-  lastWorkedAt?: string;
-}
-
-interface ActiveShift {
-  id: string;
-  job: {
+  operatingHours: string;
+  verified: {
+    businessLicense: boolean;
+  };
+  jobReality: {
+    positions: string[];
+    sampleShift: {
+      time: string;
+      workload: string;
+      rushHour: string;
+    };
+    uniform: "Có sẵn" | "Tự chuẩn bị";
+    specialRequirements: string[];
+  };
+  compensation: {
+    hourlyRate?: number;
+    perShiftRate?: number;
+    hasPeakHourBonus: boolean;
+    paymentMethod: "Trả ngay" | "Theo tuần" | "Theo tháng";
+    hasTip: boolean;
+    tipSharing: boolean;
+    hasMeal: boolean;
+    rewards: {
+      fullAttendance: string;
+      lateArrival: string;
+      cancellation: string;
+    };
+  };
+  trustScore: {
+    averageRating: number;
+    totalRatings: number;
+    completionRate: number;
+    cancellationRate: number;
+    onTimePaymentRate: number;
+    reviews: Array<{
+      worker: string;
+      comment: string;
+      rating: number;
+      date: string;
+    }>;
+  };
+  badges: string[];
+  culture: {
+    workAtmosphere: "Nhanh – áp lực" | "Thân thiện – hỗ trợ";
+    managerStyle: "Dễ tính" | "Nghiêm";
+    hasTraining: boolean;
+    longTermOpportunity: boolean;
+  };
+  operations: {
+    cancellationPolicy: string;
+    emergencyContact: string;
+    safetyPolicy: string;
+    noFeeCommitment: boolean;
+  };
+  activeShifts: Array<{
     id: string;
     title: string;
     startTime: string;
     endTime: string;
     hourlyRate: number;
+    filled: number;
     maxWorkers: number;
-  };
-  matches: Array<{
-    id: string;
-    status: string;
-    worker: {
-      id: string;
-      name: string;
-      rating: number;
-    };
-    checkIn?: {
-      checkInTime: string;
-    };
   }>;
-  branch: {
-    name: string;
-    address: string;
-  };
-}
-
-interface Invoice {
-  id: string;
-  jobId: string;
-  jobTitle: string;
-  date: string;
-  totalAmount: number;
-  workers: number;
-  status: string;
 }
 
 export default function BusinessProfile() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalJobs: 0,
-    activeJobs: 0,
-    totalWorkers: 0,
-    totalPayments: 0,
-    budgetRemaining: 10000000, // Mock budget
-  });
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [favoriteWorkers, setFavoriteWorkers] = useState<FavoriteWorker[]>([]);
-  const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
-  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
-  const [employerRating, setEmployerRating] = useState(0);
-  const [isVerified, setIsVerified] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const [profile, setProfile] = useState<BusinessProfile | null>(null);
 
   useEffect(() => {
-    fetchData();
-    // Set up polling for real-time updates (mock WebSocket)
-    const interval = setInterval(fetchData, 10000); // Poll every 10 seconds
-    return () => clearInterval(interval);
+    fetchProfile();
   }, []);
 
-  const fetchData = async () => {
+  const fetchProfile = async () => {
     try {
       setLoading(true);
-      const [jobsRes, branchesRes, paymentsRes, ratingsRes, matchesRes] =
-        await Promise.all([
-          api.get("/jobs"),
-          api.get("/branches"),
-          api.get("/payments"),
-          api.get("/ratings"),
-          api.get("/matches"),
-        ]);
+      const [jobsRes, branchesRes, paymentsRes, ratingsRes, matchesRes] = await Promise.all([
+        api.get("/jobs"),
+        api.get("/branches"),
+        api.get("/payments"),
+        api.get("/ratings"),
+        api.get("/matches"),
+      ]);
 
       const jobs = jobsRes.data.jobs || [];
+      const branches = branchesRes.data.branches || [];
       const payments = paymentsRes.data.payments || [];
       const ratings = ratingsRes.data.ratings || [];
       const matches = matchesRes.data.matches || [];
 
-      // Calculate stats
-      const activeJobs = jobs.filter((j: any) =>
-        ["PENDING", "MATCHED", "IN_PROGRESS"].includes(j.status)
-      );
-      const completedJobs = jobs.filter(
-        (j: any) => j.status === "COMPLETED"
-      );
+      const completedMatches = matches.filter((m: any) => m.status === "COMPLETED");
+      const cancelledMatches = matches.filter((m: any) => ["CANCELLED", "REJECTED"].includes(m.status));
+      
+      const totalJobs = jobs.length || 1;
+      const completionRate = (completedMatches.length / totalJobs) * 100;
+      const cancellationRate = (cancelledMatches.length / totalJobs) * 100;
+      
+      const onTimePayments = payments.filter((p: any) => {
+        // TODO: Check if payment was on time
+        return p.status === "COMPLETED";
+      }).length;
+      const onTimePaymentRate = payments.length > 0 ? (onTimePayments / payments.length) * 100 : 100;
 
-      // Calculate employer rating from worker ratings
-      const workerRatings = ratings.filter((r: any) => r.fromWorker);
-      if (workerRatings.length > 0) {
-        const avgRating =
-          workerRatings.reduce(
-            (sum: number, r: any) => sum + (r.employerRating || 0),
-            0
-          ) / workerRatings.length;
-        setEmployerRating(avgRating);
+      const workerRatings = ratings.filter((r: any) => r.raterId !== user?.id);
+      const averageRating = workerRatings.length > 0
+        ? workerRatings.reduce((sum: number, r: any) => sum + r.score, 0) / workerRatings.length
+        : 0;
+
+      const mainBranch = branches[0] || { name: user?.companyName || "", address: "", city: "" };
+
+      // Build profile
+      const businessProfile: BusinessProfile = {
+        id: user?.id || "",
+        name: user?.name || "",
+        companyName: user?.companyName || undefined,
+        logo: undefined,
+        storefrontImage: undefined,
+        type: branches.length > 1 ? "Chuỗi" : "Independent",
+        businessType: "Nhà hàng",
+        scale: "<10",
+        address: mainBranch.address || "",
+        city: mainBranch.city || "",
+        latitude: mainBranch.latitude,
+        longitude: mainBranch.longitude,
+        operatingHours: "07:00 - 22:00",
+        verified: {
+          businessLicense: !!(user as any)?.taxCode || false,
+        },
+        jobReality: {
+          positions: ["Phục vụ", "Thu ngân", "Phụ bếp", "Pha chế"],
+          sampleShift: {
+            time: "4-6 giờ/ca",
+            workload: "Trung bình - cao (giờ cao điểm)",
+            rushHour: "18:00 - 21:00",
+          },
+          uniform: "Có sẵn",
+          specialRequirements: ["Đứng lâu", "Mang vác"],
+        },
+        compensation: {
+          hourlyRate: 50000,
+          hasPeakHourBonus: true,
+          paymentMethod: "Trả ngay",
+          hasTip: true,
+          tipSharing: true,
+          hasMeal: true,
+          rewards: {
+            fullAttendance: "+10% lương",
+            lateArrival: "-5% lương",
+            cancellation: "Không có phạt",
+          },
+        },
+        trustScore: {
+          averageRating: averageRating,
+          totalRatings: workerRatings.length,
+          completionRate: Math.round(completionRate),
+          cancellationRate: Math.round(cancellationRate),
+          onTimePaymentRate: Math.round(onTimePaymentRate),
+          reviews: workerRatings.slice(0, 5).map((r: any) => ({
+            worker: "Lao động ẩn danh",
+            comment: r.comment || "",
+            rating: r.score,
+            date: r.createdAt || "",
+          })),
+        },
+        badges: [],
+        culture: {
+          workAtmosphere: "Thân thiện – hỗ trợ",
+          managerStyle: "Dễ tính",
+          hasTraining: true,
+          longTermOpportunity: true,
+        },
+        operations: {
+          cancellationPolicy: "Hủy trước 4 giờ không phạt",
+          emergencyContact: (user as any)?.phone || "",
+          safetyPolicy: "Có bảo hiểm ca làm, an toàn lao động",
+          noFeeCommitment: true,
+        },
+        activeShifts: jobs.filter((j: any) => ["PENDING", "MATCHED", "IN_PROGRESS"].includes(j.status)).slice(0, 5).map((job: any) => ({
+          id: job.id,
+          title: job.title,
+          startTime: job.startTime,
+          endTime: job.endTime,
+          hourlyRate: job.hourlyRate,
+          filled: matches.filter((m: any) => m.jobId === job.id && m.status === "ACCEPTED").length,
+          maxWorkers: job.maxWorkers || 1,
+        })),
+      };
+
+      // Determine badges
+      if (businessProfile.trustScore.onTimePaymentRate >= 95) {
+        businessProfile.badges.push("Trả lương đúng hạn");
+      }
+      if (businessProfile.trustScore.cancellationRate <= 10) {
+        businessProfile.badges.push("Ít hủy ca");
+      }
+      if (businessProfile.trustScore.averageRating >= 4.5) {
+        businessProfile.badges.push("Nhà hàng thân thiện");
       }
 
-      setStats({
-        totalJobs: jobs.length,
-        activeJobs: activeJobs.length,
-        totalWorkers: new Set(
-          matches.map((m: any) => m.workerId).filter(Boolean)
-        ).size,
-        totalPayments: payments.reduce(
-          (sum: number, p: any) => sum + p.amount,
-          0
-        ),
-        budgetRemaining: 10000000 - payments.reduce(
-          (sum: number, p: any) => sum + p.amount,
-          0
-        ),
-      });
-
-      setBranches(branchesRes.data.branches || []);
-
-      // Get favorite workers (top rated workers who worked multiple times)
-      const workerStats = new Map<string, any>();
-      matches.forEach((match: any) => {
-        if (match.worker && match.status === "COMPLETED") {
-          const workerId = match.worker.id;
-          if (!workerStats.has(workerId)) {
-            workerStats.set(workerId, {
-              worker: match.worker,
-              count: 0,
-              totalRating: 0,
-            });
-          }
-          const stats = workerStats.get(workerId);
-          stats.count++;
-          stats.totalRating += match.worker.rating || 0;
-        }
-      });
-
-      const favorites: FavoriteWorker[] = Array.from(workerStats.values())
-        .filter((s) => s.count >= 2)
-        .map((s) => ({
-          id: s.worker.id,
-          name: s.worker.name,
-          rating: s.totalRating / s.count,
-          completedJobs: s.count,
-          skills: s.worker.skills || [],
-        }))
-        .sort((a, b) => b.rating - a.rating)
-        .slice(0, 10);
-
-      setFavoriteWorkers(favorites);
-
-      // Get active shifts with matches
-      const activeShiftsData: ActiveShift[] = [];
-      for (const job of activeJobs.slice(0, 5)) {
-        try {
-          const jobMatches = matches.filter((m: any) => m.jobId === job.id);
-          const jobMatchesWithCheckIn = await Promise.all(
-            jobMatches.map(async (match: any) => {
-              try {
-                const checkInRes = await api.get(
-                  `/checkin?matchId=${match.id}`
-                );
-                return {
-                  ...match,
-                  checkIn: checkInRes.data.checkIn,
-                };
-              } catch {
-                return match;
-              }
-            })
-          );
-
-          activeShiftsData.push({
-            id: job.id,
-            job,
-            matches: jobMatchesWithCheckIn,
-            branch: job.branch || { name: "N/A", address: "N/A" },
-          });
-        } catch (error) {
-          console.error("Error fetching job details:", error);
-        }
-      }
-      setActiveShifts(activeShiftsData);
-
-      // Get recent invoices
-      const invoices: Invoice[] = completedJobs.slice(0, 5).map((job: any) => {
-        const jobPayments = payments.filter((p: any) => p.jobId === job.id);
-        return {
-          id: `inv-${job.id}`,
-          jobId: job.id,
-          jobTitle: job.title,
-          date: job.endTime,
-          totalAmount: jobPayments.reduce(
-            (sum: number, p: any) => sum + p.amount,
-            0
-          ),
-          workers: jobPayments.length,
-          status: "PAID",
-        };
-      });
-      setRecentInvoices(invoices);
-
-      // Mock verification (in real app, check GPKD)
-      setIsVerified(user?.companyName ? true : false);
+      setProfile(businessProfile);
     } catch (error) {
-      toast.error("Lỗi khi tải dữ liệu");
+      toast.error("Lỗi khi tải profile");
+      console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAISuggestion = async () => {
-    toast.success("AI đang phân tích lịch sử và đề xuất khung giờ tối ưu...");
-    // TODO: Implement AI suggestion based on historical data
-  };
-
-  const handleNotifyFavorites = async (jobId: string) => {
-    toast.success(
-      `Đã gửi thông báo ưu tiên cho ${favoriteWorkers.length} nhân sự ruột`
-    );
-    // TODO: Implement notification to favorite workers
-  };
-
-  if (loading) {
+  if (loading || !profile) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
@@ -262,451 +272,509 @@ export default function BusinessProfile() {
     );
   }
 
+  const getPositionIcon = (position: string) => {
+    const iconMap: { [key: string]: any } = {
+      "Phục vụ": UtensilsCrossed,
+      "Thu ngân": ShoppingBag,
+      "Phụ bếp": ChefHat,
+      "Pha chế": Sparkles,
+    };
+    return iconMap[position] || UtensilsCrossed;
+  };
+
+  const getBusinessTypeIcon = (type: string) => {
+    const iconMap: { [key: string]: any } = {
+      "Quán ăn": Store,
+      "Nhà hàng": Building2,
+      "Cafe": Coffee,
+      "Bar": Coffee,
+      "Chuỗi F&B": Factory,
+    };
+    return iconMap[type] || Building2;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50/30 to-gray-50">
       <Navbar />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Dashboard Doanh nghiệp
-            </h1>
-            <p className="text-xl text-gray-600">
-              Trung tâm điều phối nhân sự
-            </p>
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
+        {/* Header with Logo & Name */}
+        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
+          <div className="flex items-start gap-6 mb-6">
+            <div className="w-24 h-24 bg-gradient-orange rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+              {profile.logo ? (
+                <img src={profile.logo} alt={profile.name} className="w-full h-full rounded-2xl object-cover" />
+              ) : (
+                profile.name.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">{profile.companyName || profile.name}</h1>
+                {profile.verified.businessLicense && (
+                  <CheckCircle2 className="w-6 h-6 text-green-600" strokeWidth={2} />
+                )}
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  profile.type === "Chuỗi" 
+                    ? "bg-purple-100 text-purple-700" 
+                    : "bg-gray-100 text-gray-700"
+                }`}>
+                  {profile.type}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <div className="flex items-center gap-1">
+                  {(() => {
+                    const Icon = getBusinessTypeIcon(profile.businessType);
+                    return <Icon className="w-4 h-4" strokeWidth={1.5} />;
+                  })()}
+                  {profile.businessType}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Users className="w-4 h-4" strokeWidth={1.5} />
+                  {profile.scale} nhân sự/ca
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" strokeWidth={1.5} />
+                  {profile.address}, {profile.city}
+                </div>
+              </div>
+            </div>
           </div>
-          <Link
-            href="/business/dashboard"
-            className="px-6 py-3 bg-white text-orange-600 border-2 border-orange-600 rounded-lg hover:bg-orange-50 transition font-medium shadow-lg"
-          >
-            📊 Xem Dashboard
-          </Link>
+
+          {/* Highlight Box - Những điều cần biết trước khi nhận ca */}
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" strokeWidth={2} />
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-900 mb-2">Những điều cần biết trước khi nhận ca</h3>
+                <div className="grid md:grid-cols-2 gap-2 text-sm text-gray-700">
+                  <div>• Lương: {formatCurrency(profile.compensation.hourlyRate || 0)}/giờ</div>
+                  <div>• Trả lương: {profile.compensation.paymentMethod}</div>
+                  <div>• Tip: {profile.compensation.hasTip ? "Có" : "Không"}</div>
+                  <div>• Ăn ca: {profile.compensation.hasMeal ? "Có" : "Không"}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2 border-b border-gray-200 mb-6">
+            {[
+              { id: "overview" as TabType, label: "Tổng quan", icon: Building2 },
+              { id: "shifts" as TabType, label: "Ca làm", icon: Calendar },
+              { id: "reviews" as TabType, label: "Đánh giá", icon: Star },
+              { id: "policies" as TabType, label: "Quy định", icon: ShieldCheck },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-6 py-3 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${
+                    activeTab === tab.id
+                      ? "border-orange-600 text-orange-600"
+                      : "border-transparent text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" strokeWidth={1.5} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column - Brand Identity & Trust */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Brand Card */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              {/* Logo & Verification */}
-              <div className="text-center mb-6">
-                <div className="relative inline-block">
-                  <div className="w-32 h-32 bg-gradient-orange rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                    <span className="text-white font-bold text-4xl">
-                      {user?.companyName?.charAt(0).toUpperCase() || "C"}
+        {/* Tab Content */}
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* I. THÔNG TIN NHẬN DIỆN */}
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-orange-600" strokeWidth={1.5} />
+                  Thông tin nhận diện
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Loại hình</label>
+                    <span className="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium flex items-center gap-2 w-fit">
+                      {(() => {
+                        const Icon = getBusinessTypeIcon(profile.businessType);
+                        return <Icon className="w-4 h-4" strokeWidth={1.5} />;
+                      })()}
+                      {profile.businessType}
                     </span>
                   </div>
-                  {isVerified && (
-                    <div className="absolute -top-2 -right-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
-                      <svg
-                        className="w-4 h-4"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Đã xác thực
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Quy mô</label>
+                    <span className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">
+                      {profile.scale} nhân sự/ca
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Địa chỉ</label>
+                    <div className="flex items-start gap-2 text-sm text-gray-700">
+                      <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
+                      <div>
+                        {profile.address}
+                        <br />
+                        {profile.city}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Giờ hoạt động</label>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Clock className="w-4 h-4" strokeWidth={1.5} />
+                      {profile.operatingHours}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* IV. ĐỘ TIN CẬY & ĐÁNH GIÁ (Trust Layer) */}
+              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-orange-300">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-orange-600" strokeWidth={1.5} />
+                  Độ tin cậy & Đánh giá
+                </h2>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+                        <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" strokeWidth={1.5} />
+                        {profile.trustScore.averageRating.toFixed(1)}
+                      </div>
+                      <div className="text-sm text-gray-600">({profile.trustScore.totalRatings} đánh giá)</div>
+                    </div>
+                    {profile.verified.businessLicense && (
+                      <div className="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-xs font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4" strokeWidth={1.5} />
+                        Đã xác minh GPKD
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">{profile.trustScore.completionRate}%</div>
+                      <div className="text-xs text-gray-600">Hoàn thành ca</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-600">{profile.trustScore.cancellationRate}%</div>
+                      <div className="text-xs text-gray-600">Hủy ca</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">{profile.trustScore.onTimePaymentRate}%</div>
+                      <div className="text-xs text-gray-600">Trả lương đúng hạn</div>
+                    </div>
+                  </div>
+
+                  {/* Badges */}
+                  {profile.badges.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
+                      {profile.badges.map((badge) => (
+                        <span
+                          key={badge}
+                          className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium flex items-center gap-1"
+                        >
+                          <Award className="w-3 h-3" strokeWidth={1.5} />
+                          {badge}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">
-                  {user?.companyName || "Doanh nghiệp"}
-                </h2>
-                <p className="text-gray-600">{user?.name}</p>
               </div>
+            </div>
 
-              {/* Employer Rating */}
-              <div className="mb-6 p-4 bg-orange-50 rounded-xl border border-orange-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-gray-700">
-                    Đánh giá từ người lao động
+            {/* II. THÔNG TIN CÔNG VIỆC */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Thông tin công việc</h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Các vị trí thường tuyển</label>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.jobReality.positions.map((pos) => {
+                      const Icon = getPositionIcon(pos);
+                      return (
+                        <span
+                          key={pos}
+                          className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium flex items-center gap-2"
+                        >
+                          <Icon className="w-4 h-4" strokeWidth={1.5} />
+                          {pos}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Mô tả ca làm mẫu</label>
+                  <div className="space-y-2 text-sm text-gray-700">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" strokeWidth={1.5} />
+                      <span>Thời gian: {profile.jobReality.sampleShift.time}</span>
+                    </div>
+                    <div>• Khối lượng: {profile.jobReality.sampleShift.workload}</div>
+                    <div>• Giờ cao điểm: {profile.jobReality.sampleShift.rushHour}</div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Đồng phục</label>
+                  <span className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                    profile.jobReality.uniform === "Có sẵn"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-100 text-gray-700"
+                  }`}>
+                    {profile.jobReality.uniform}
                   </span>
-                  <div className="flex items-center gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <svg
-                        key={i}
-                        className={`w-5 h-5 ${
-                          i < Math.round(employerRating)
-                            ? "text-yellow-400"
-                            : "text-gray-300"
-                        }`}
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Yêu cầu đặc biệt</label>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.jobReality.specialRequirements.map((req) => (
+                      <span key={req} className="px-3 py-2 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-medium">
+                        {req}
+                      </span>
                     ))}
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-orange-600">
-                  {employerRating.toFixed(1)} / 5.0
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Giúp thu hút CLs chất lượng
-                </p>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="space-y-3">
-                <Link
-                  href="/business/jobs/new"
-                  className="w-full px-6 py-4 bg-gradient-orange text-white rounded-xl hover:opacity-90 transition font-bold shadow-lg text-center block"
-                >
-                  ➕ Đăng ca mới
-                </Link>
-                <button
-                  onClick={handleAISuggestion}
-                  className="w-full px-6 py-4 bg-white text-orange-600 border-2 border-orange-600 rounded-xl hover:bg-orange-50 transition font-bold shadow-lg"
-                >
-                  🤖 AI Suggestion
-                </button>
               </div>
             </div>
 
-            {/* Favorite Workers */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">
-                ⭐ Nhân sự ruột ({favoriteWorkers.length})
-              </h3>
-              {favoriteWorkers.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Chưa có nhân sự ruột. Hoàn thành ca làm việc để xây dựng danh sách.
-                </p>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-                  {favoriteWorkers.map((worker) => (
-                    <div
-                      key={worker.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-orange-50 transition"
-                    >
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900">
-                          {worker.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex items-center">
-                            {[...Array(5)].map((_, i) => (
-                              <svg
-                                key={i}
-                                className={`w-3 h-3 ${
-                                  i < Math.round(worker.rating)
-                                    ? "text-yellow-400"
-                                    : "text-gray-300"
-                                }`}
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                            ))}
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            {worker.completedJobs} ca
-                          </span>
-                        </div>
+            {/* III. LƯƠNG & QUYỀN LỢI */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-green-600" strokeWidth={1.5} />
+                Lương & Quyền lợi
+              </h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mức lương</label>
+                  <div className="space-y-2 mb-4">
+                    {profile.compensation.hourlyRate && (
+                      <div>
+                        <span className="text-sm text-gray-600">Theo giờ: </span>
+                        <span className="text-lg font-bold text-orange-600">
+                          {formatCurrency(profile.compensation.hourlyRate)}
+                        </span>
+                      </div>
+                    )}
+                    {profile.compensation.perShiftRate && (
+                      <div>
+                        <span className="text-sm text-gray-600">Theo ca: </span>
+                        <span className="text-lg font-bold text-orange-600">
+                          {formatCurrency(profile.compensation.perShiftRate)}
+                        </span>
+                      </div>
+                    )}
+                    {profile.compensation.hasPeakHourBonus && (
+                      <div className="text-sm text-green-600">✓ Có phụ cấp giờ cao điểm</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cách trả lương</label>
+                    <span className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
+                      {profile.compensation.paymentMethod}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tip & Ăn ca</label>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-700">
+                        <span>Tip: {profile.compensation.hasTip ? "Có" : "Không"}</span>
+                        {profile.compensation.hasTip && profile.compensation.tipSharing && (
+                          <span className="text-xs text-gray-500">(Chia đều)</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-700">
+                        Ăn ca: {profile.compensation.hasMeal ? "Có" : "Không"}
                       </div>
                     </div>
-                  ))}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Thưởng / phạt</label>
+                    <div className="space-y-1 text-sm text-gray-700">
+                      <div>• Đi đủ ca: <span className="text-green-600 font-medium">{profile.compensation.rewards.fullAttendance}</span></div>
+                      <div>• Trễ giờ: <span className="text-yellow-600 font-medium">{profile.compensation.rewards.lateArrival}</span></div>
+                      <div>• Hủy ca: <span className="text-gray-600">{profile.compensation.rewards.cancellation}</span></div>
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
+            </div>
+
+            {/* V. VĂN HÓA & MÔI TRƯỜNG */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Văn hóa & Môi trường</h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Không khí làm việc</label>
+                  <span className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                    profile.culture.workAtmosphere.includes("Thân thiện")
+                      ? "bg-green-100 text-green-700"
+                      : "bg-orange-100 text-orange-700"
+                  }`}>
+                    {profile.culture.workAtmosphere}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Quản lý ca</label>
+                  <span className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                    profile.culture.managerStyle === "Dễ tính"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-gray-100 text-gray-700"
+                  }`}>
+                    {profile.culture.managerStyle}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Đào tạo</label>
+                  <span className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                    profile.culture.hasTraining
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-100 text-gray-700"
+                  }`}>
+                    {profile.culture.hasTraining ? "Có đào tạo cho người mới" : "Không có đào tạo"}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cơ hội lâu dài</label>
+                  <span className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                    profile.culture.longTermOpportunity
+                      ? "bg-purple-100 text-purple-700"
+                      : "bg-gray-100 text-gray-700"
+                  }`}>
+                    {profile.culture.longTermOpportunity ? "Có thể lên part-time/full-time" : "Chỉ làm ca"}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Right Column - Operation Dashboard */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Financial Overview */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Tổng chi phí
-                </h3>
-                <p className="text-3xl font-bold text-red-600">
-                  {formatCurrency(stats.totalPayments)}
-                </p>
+        {activeTab === "shifts" && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Ca làm hiện tại</h2>
+            {profile.activeShifts.length === 0 ? (
+              <div className="text-center py-12">
+                <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" strokeWidth={1} />
+                <p className="text-gray-600">Hiện chưa có ca làm nào</p>
               </div>
-              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Số ca hoàn thành
-                </h3>
-                <p className="text-3xl font-bold text-green-600">
-                  {stats.totalJobs - stats.activeJobs}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Ngân sách còn lại
-                </h3>
-                <p className="text-3xl font-bold text-blue-600">
-                  {formatCurrency(stats.budgetRemaining)}
-                </p>
-              </div>
-              <div className="bg-gradient-orange p-6 rounded-xl shadow-lg text-white">
-                <h3 className="text-sm font-medium text-white/80 mb-1">
-                  Nhân sự đang làm
-                </h3>
-                <p className="text-3xl font-bold">{stats.totalWorkers}</p>
-              </div>
-            </div>
-
-            {/* Multi-Branch Management */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-gray-900">
-                  🏢 Quản lý đa chi nhánh
-                </h3>
-                <Link
-                  href="/business/branches"
-                  className="px-4 py-2 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition"
-                >
-                  + Thêm chi nhánh
-                </Link>
-              </div>
-              {branches.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 mb-4">
-                    Chưa có chi nhánh nào. Tạo chi nhánh đầu tiên để bắt đầu.
-                  </p>
-                  <Link
-                    href="/business/branches"
-                    className="inline-block px-6 py-3 bg-gradient-orange text-white rounded-lg hover:opacity-90 transition font-medium shadow-lg"
-                  >
-                    Tạo chi nhánh
-                  </Link>
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-2 gap-4">
-                  {branches.map((branch) => (
-                    <div
-                      key={branch.id}
-                      className="p-4 border border-gray-200 rounded-lg hover:border-orange-300 transition"
-                    >
-                      <h4 className="font-bold text-gray-900 mb-1">
-                        {branch.name}
-                      </h4>
-                      <p className="text-sm text-gray-600">{branch.address}</p>
-                      <p className="text-xs text-gray-500 mt-1">{branch.city}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Active Shifts Monitor */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">
-                📊 Ca làm việc đang diễn ra
-              </h3>
-              {activeShifts.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-4xl">📅</span>
-                  </div>
-                  <p className="text-gray-600 mb-4 text-lg">
-                    Quán đang đủ người? Hãy chuẩn bị trước kịch bản cho giờ cao điểm bằng cách tạo ca dự phòng.
-                  </p>
-                  <Link
-                    href="/business/jobs/new"
-                    className="inline-block px-6 py-3 bg-gradient-orange text-white rounded-lg hover:opacity-90 transition font-medium shadow-lg"
-                  >
-                    ➕ Tạo ca dự phòng
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {activeShifts.map((shift) => {
-                    const filledSlots = shift.matches.filter(
-                      (m) => m.status === "ACCEPTED" || m.status === "IN_PROGRESS"
-                    ).length;
-                    const checkedIn = shift.matches.filter(
-                      (m) => m.checkIn
-                    ).length;
-                    const waiting = shift.matches.filter(
-                      (m) => m.status === "PENDING"
-                    ).length;
-
-                    return (
-                      <div
-                        key={shift.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:border-orange-300 transition"
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h4 className="font-bold text-gray-900">
-                              {shift.job.title}
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              {shift.branch.name} • {shift.branch.address}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {formatDateTime(shift.job.startTime)} -{" "}
-                              {formatDateTime(shift.job.endTime)}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold text-gray-700">
-                              {filledSlots}/{shift.job.maxWorkers} người
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {checkedIn} đã check-in
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Status Badges */}
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {filledSlots > 0 && (
-                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
-                              ✓ Đã có người ({filledSlots})
-                            </span>
-                          )}
-                          {waiting > 0 && (
-                            <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-medium">
-                              ⏳ Đang đợi ({waiting})
-                            </span>
-                          )}
-                          {checkedIn > 0 && (
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                              📍 Đã check-in ({checkedIn})
-                            </span>
-                          )}
-                          {filledSlots < shift.job.maxWorkers && (
-                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
-                              ⚠️ Thiếu người
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Workers List */}
-                        {shift.matches.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-gray-100">
-                            <p className="text-xs font-semibold text-gray-700 mb-2">
-                              Nhân sự:
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {shift.matches
-                                .filter(
-                                  (m) =>
-                                    m.status === "ACCEPTED" ||
-                                    m.status === "IN_PROGRESS"
-                                )
-                                .map((match) => (
-                                  <div
-                                    key={match.id}
-                                    className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded text-xs"
-                                  >
-                                    <span className="font-medium text-gray-900">
-                                      {match.worker.name}
-                                    </span>
-                                    {match.checkIn ? (
-                                      <span className="text-green-600">✓</span>
-                                    ) : (
-                                      <span className="text-gray-400">○</span>
-                                    )}
-                                  </div>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="mt-3 flex gap-2">
-                          <Link
-                            href={`/business/jobs/${shift.job.id}`}
-                            className="flex-1 px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-orange-100 hover:text-orange-700 transition text-center"
-                          >
-                            Xem chi tiết
-                          </Link>
-                          {favoriteWorkers.length > 0 && (
-                            <button
-                              onClick={() => handleNotifyFavorites(shift.id)}
-                              className="px-4 py-2 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition"
-                            >
-                              🔔 Ưu tiên
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Automatic Invoicing */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-gray-900">
-                  📄 Hóa đơn & Báo cáo
-                </h3>
-                <button
-                  onClick={() => {
-                    toast.success("Đang xuất báo cáo...");
-                    // TODO: Implement invoice export
-                  }}
-                  className="px-4 py-2 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition"
-                >
-                  📥 Xuất báo cáo
-                </button>
-              </div>
-              {recentInvoices.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
-                  Chưa có hóa đơn nào
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {recentInvoices.map((invoice) => (
-                    <div
-                      key={invoice.id}
-                      className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-orange-300 transition"
-                    >
+            ) : (
+              <div className="space-y-4">
+                {profile.activeShifts.map((shift) => (
+                  <div key={shift.id} className="border border-gray-200 rounded-lg p-4 hover:border-orange-300 transition">
+                    <div className="flex justify-between items-start mb-2">
                       <div>
-                        <p className="font-semibold text-gray-900">
-                          {invoice.jobTitle}
-                        </p>
+                        <h3 className="font-bold text-gray-900">{shift.title}</h3>
                         <p className="text-sm text-gray-600">
-                          {formatDateTime(invoice.date)} • {invoice.workers} người
+                          {formatDateTime(shift.startTime)} - {formatDateTime(shift.endTime)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-orange-600">
-                          {formatCurrency(invoice.totalAmount)}
-                        </p>
-                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
-                          {invoice.status}
-                        </span>
+                        <div className="text-lg font-bold text-orange-600">
+                          {formatCurrency(shift.hourlyRate)}/giờ
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {shift.filled}/{shift.maxWorkers} người
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "reviews" && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Đánh giá từ người lao động</h2>
+            {profile.trustScore.reviews.length === 0 ? (
+              <div className="text-center py-12">
+                <Star className="w-16 h-16 text-gray-300 mx-auto mb-4" strokeWidth={1} />
+                <p className="text-gray-600">Chưa có đánh giá nào</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {profile.trustScore.reviews.map((review, idx) => (
+                  <div key={idx} className="border-b border-gray-200 pb-4 last:border-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${
+                              i < review.rating ? "text-yellow-500 fill-yellow-500" : "text-gray-300"
+                            }`}
+                            strokeWidth={1.5}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm text-gray-600">{review.worker}</span>
+                    </div>
+                    {review.comment && (
+                      <p className="text-sm text-gray-700 italic">"{review.comment}"</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "policies" && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Vận hành & An toàn</h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Quy định hủy ca</label>
+                <div className="flex items-start gap-2 text-sm text-gray-700">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
+                  {profile.operations.cancellationPolicy}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Liên hệ khẩn cấp</label>
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <Phone className="w-4 h-4" strokeWidth={1.5} />
+                  {profile.operations.emergencyContact || "Chưa cập nhật"}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Chính sách an toàn</label>
+                <div className="flex items-start gap-2 text-sm text-gray-700">
+                  <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
+                  {profile.operations.safetyPolicy}
+                </div>
+              </div>
+              {profile.operations.noFeeCommitment && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-700 font-medium">
+                    <CheckCircle2 className="w-5 h-5" strokeWidth={2} />
+                    Cam kết không thu phí người lao động
+                  </div>
                 </div>
               )}
             </div>
           </div>
+        )}
+
+        {/* Chat Button */}
+        <div className="fixed bottom-6 right-6">
+          <button
+            onClick={() => toast.success("Tính năng chat sẽ được thêm sớm!")}
+            className="w-14 h-14 bg-gradient-orange text-white rounded-full shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
+          >
+            <MessageCircle className="w-6 h-6" strokeWidth={2} />
+          </button>
         </div>
       </div>
-
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #f97316;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #ea580c;
-        }
-      `}</style>
     </div>
   );
 }
-
-
-

@@ -11,11 +11,30 @@
 body {
   color: rgb(var(--foreground-rgb));
   background: white;
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  
+  /* Minimalism utilities */
+  .minimal-shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  }
+  
+  .minimal-shadow-lg {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  }
+  
+  /* Radial gradient overlay */
+  .gradient-overlay {
+    background-image: radial-gradient(200% 200% at 50% 50%, #011131 0%, #050017 25%, rgba(0, 19, 57, 0.045) 50%, #000000 100%);
+    opacity: 0.4;
+    mix-blend-mode: multiply;
   }
 }
 

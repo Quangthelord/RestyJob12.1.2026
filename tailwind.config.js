@@ -65,6 +65,8 @@ module.exports = {
         'gradient-orange-light': 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
         'gradient-orange-purple': 'linear-gradient(135deg, #f97316 0%, #9333ea 100%)',
         'gradient-job': 'radial-gradient(200% 200%, #011131 0%, #050017 25%, rgba(0, 19, 57, 0.045) 50%, #000000 100%)',
+        'gradient-radial-dark': 'radial-gradient(200% 200% at 50% 50%, #011131 0%, #050017 25%, rgba(0, 19, 57, 0.045) 50%, #000000 100%)',
+        'gradient-radial-subtle': 'radial-gradient(200% 200% at 50% 50%, rgba(1, 17, 49, 0.045) 0%, rgba(5, 0, 23, 0.045) 25%, rgba(0, 19, 57, 0.02) 50%, rgba(0, 0, 0, 0.01) 100%)',
       },
     },
   },
